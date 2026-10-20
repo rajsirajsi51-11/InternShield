@@ -879,13 +879,19 @@ export default function App() {
                   <div className="space-y-4">
                     {(result.issues || []).length === 0 && (
                       <div className="flex items-start gap-5 p-5 md:p-6 rounded-2xl bg-white dark:bg-[#0A0A0A] border border-zinc-200 dark:border-white/[0.05]">
-                        <div className="w-10 h-10 rounded-full bg-green-50 dark:bg-green-500/10 flex items-center justify-center shrink-0 border border-green-100 dark:border-green-500/20">
-                          <CheckCircle2 className="w-5 h-5 text-green-500" />
+                        <div className={`w-10 h-10 rounded-full ${result.verdict === 'Safe' && result.riskScore < 35 ? 'bg-green-50 dark:bg-green-500/10 border-green-100 dark:border-green-500/20' : 'bg-orange-50 dark:bg-orange-500/10 border-orange-100 dark:border-orange-500/20'} flex items-center justify-center shrink-0 border`}>
+                          {result.verdict === 'Safe' && result.riskScore < 35
+                            ? <CheckCircle2 className="w-5 h-5 text-green-500" />
+                            : <Info className="w-5 h-5 text-orange-500" />}
                         </div>
                         <div>
-                          <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-1">No major issues found</h4>
+                          <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-1">
+                            {result.verdict === 'Safe' && result.riskScore < 35 ? 'No major issues found' : 'No issue details returned'}
+                          </h4>
                           <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed font-light">
-                            The offer appears legitimate based on our AI analysis. Always verify through official channels.
+                            {result.verdict === 'Safe' && result.riskScore < 35
+                              ? 'No major fraud indicators were identified. Always verify through official channels.'
+                              : `This scan is labeled ${result.verdict} with a ${result.riskScore}% risk score, but no supporting issue details were returned. Treat the offer cautiously and verify it through official channels.`}
                           </p>
                         </div>
                       </div>

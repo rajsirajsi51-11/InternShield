@@ -343,11 +343,18 @@ exports.handler = async (event) => {
     }
 
     // 5. AI analysis via Groq (async)
-    let aiResult = { aiScore: 50, verdict: 'Suspicious', issues: [], summary: '' };
+    let aiResult;
     try {
       aiResult = await getAIAnalysis(companyName, senderEmail, offerContent);
     } catch (aiErr) {
-      console.error('Groq error:', aiErr.message);
+      console.error('Groq analysis failed:', aiErr);
+      return {
+        statusCode: 502,
+        headers: CORS,
+        body: JSON.stringify({
+          error: 'AI analysis is currently unavailable. Please try again later. If this continues, check the Groq API key and account limits in Netlify.',
+        }),
+      };
     }
 
     // 6. Combine scores: Advanced Additive + Max Formula
