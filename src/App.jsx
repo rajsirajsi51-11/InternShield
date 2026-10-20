@@ -4,9 +4,46 @@ import {
   RefreshCw, Sun, Moon, CheckCircle2, Shield, Check,
   ShieldCheck, Info, History, LogOut, LogIn, UserCircle
 } from 'lucide-react';
-import { auth, googleProvider, signInWithPopup, signOut, db } from './firebase';
+import {
+  auth,
+  createUserWithEmailAndPassword,
+  googleProvider,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+  db,
+} from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
+
+function getAuthErrorMessage(error) {
+  switch (error?.code) {
+    case 'auth/email-already-in-use':
+      return 'An account already exists for this email. Try signing in instead.';
+    case 'auth/invalid-email':
+      return 'Enter a valid email address.';
+    case 'auth/weak-password':
+      return 'Choose a password with at least 6 characters.';
+    case 'auth/user-not-found':
+    case 'auth/wrong-password':
+    case 'auth/invalid-credential':
+      return 'The email or password is incorrect.';
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Please wait a little and try again.';
+    case 'auth/network-request-failed':
+      return 'Unable to connect. Check your internet connection and try again.';
+    case 'auth/popup-closed-by-user':
+      return 'The Google sign-in window was closed before you finished signing in.';
+    case 'auth/popup-blocked':
+      return 'Your browser blocked the Google sign-in window. Allow pop-ups and try again.';
+    case 'auth/unauthorized-domain':
+      return 'This website is not authorized for Firebase sign-in. Add its domain in Firebase Authentication settings.';
+    case 'auth/operation-not-allowed':
+      return 'This sign-in method is not enabled in Firebase Authentication settings.';
+    default:
+      return 'Sign-in failed. Please try again.';
+  }
+}
 
 // ─── Severity helpers ──────────────────────────────────────────────────────────
 const severityConfig = {
@@ -110,21 +147,65 @@ export default function App() {
   const [view,        setView]        = useState('scan'); // 'scan' | 'history' | 'auth'
   const [history,     setHistory]     = useState([]);
   const [loadingHist, setLoadingHist] = useState(false);
+  const [authMode,    setAuthMode]    = useState('login');
+  const [authEmail,   setAuthEmail]   = useState('');
+  const [authPassword,setAuthPassword]= useState('');
+  const [authError,   setAuthError]   = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
 
   useEffect(() => {
+    if (!auth) return undefined;
     const unsubscribe = onAuthStateChanged(auth, setUser);
     return () => unsubscribe();
   }, []);
 
   const loginWithGoogle = async () => {
-    try { 
+    setAuthError('');
+    if (!auth || !googleProvider) {
+      setAuthError('Sign-in is unavailable because Firebase is not configured. Add the VITE_FIREBASE_* environment variables and rebuild the app.');
+      return;
+    }
+    setAuthLoading(true);
+    try {
       await signInWithPopup(auth, googleProvider);
       setView('scan'); // Go back to homepage after login
-    } catch (e) {
-      console.error('Sign in error', e);
+    } catch (error) {
+      setAuthError(getAuthErrorMessage(error));
+    } finally {
+      setAuthLoading(false);
     }
   };
+
+  const handleEmailAuth = async (event) => {
+    event.preventDefault();
+    setAuthError('');
+    if (!auth) {
+      setAuthError('Sign-in is unavailable because Firebase is not configured. Add the VITE_FIREBASE_* environment variables and rebuild the app.');
+      return;
+    }
+    setAuthLoading(true);
+    try {
+      if (authMode === 'signup') {
+        await createUserWithEmailAndPassword(auth, authEmail.trim(), authPassword);
+      } else {
+        await signInWithEmailAndPassword(auth, authEmail.trim(), authPassword);
+      }
+      setView('scan');
+      setAuthPassword('');
+    } catch (error) {
+      setAuthError(getAuthErrorMessage(error));
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const changeAuthMode = (mode) => {
+    setAuthMode(mode);
+    setAuthError('');
+  };
+
   const logoutUser = async () => {
+    if (!auth) return;
     await signOut(auth);
     setView('scan');
   };
@@ -329,7 +410,13 @@ export default function App() {
 
             {user ? (
               <div className="flex items-center gap-3">
-                <img src={user.photoURL} alt="Profile" className="w-9 h-9 rounded-full border border-black/10 dark:border-white/10" />
+                {user.photoURL ? (
+                  <img src={user.photoURL} alt="Profile" className="w-9 h-9 rounded-full border border-black/10 dark:border-white/10" />
+                ) : (
+                  <div aria-label={user.email || 'Profile'} className="w-9 h-9 rounded-full border border-black/10 dark:border-white/10 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+                    <UserCircle className="w-5 h-5" />
+                  </div>
+                )}
                 <button onClick={logoutUser} className="hidden sm:flex items-center gap-2 flex items-center justify-center p-2.5 rounded-full bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20 transition-colors">
                   <LogOut className="w-4 h-4" />
                 </button>
@@ -365,16 +452,74 @@ export default function App() {
                   <ShieldCheck className="w-8 h-8 text-zinc-900 dark:text-zinc-100" />
                 </div>
                 
-                <h2 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100 mb-3 tracking-tight">Welcome Back</h2>
+                <h2 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100 mb-3 tracking-tight">
+                  {authMode === 'signup' ? 'Create your account' : 'Welcome Back'}
+                </h2>
                 <p className="text-zinc-500 dark:text-zinc-400 mb-8 leading-relaxed">
-                  Sign in to save your fraud scans securely in the cloud and access your personal history globally.
+                  {authMode === 'signup'
+                    ? 'Create an account to save your fraud scans securely and access your history.'
+                    : 'Sign in to save your fraud scans securely in the cloud and access your personal history globally.'}
                 </p>
+
+                <form onSubmit={handleEmailAuth} className="space-y-4 text-left">
+                  <label className="block text-sm font-medium text-zinc-600 dark:text-zinc-400">
+                    Email address
+                    <input
+                      type="email"
+                      autoComplete="email"
+                      value={authEmail}
+                      onChange={(event) => {
+                        setAuthEmail(event.target.value);
+                        setAuthError('');
+                      }}
+                      required
+                      className="mt-2 w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-transparent px-4 py-3 text-zinc-900 dark:text-zinc-100 outline-none focus:border-zinc-500"
+                      placeholder="you@example.com"
+                    />
+                  </label>
+                  <label className="block text-sm font-medium text-zinc-600 dark:text-zinc-400">
+                    Password
+                    <input
+                      type="password"
+                      autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
+                      value={authPassword}
+                      onChange={(event) => {
+                        setAuthPassword(event.target.value);
+                        setAuthError('');
+                      }}
+                      required
+                      minLength={authMode === 'signup' ? 6 : undefined}
+                      className="mt-2 w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-transparent px-4 py-3 text-zinc-900 dark:text-zinc-100 outline-none focus:border-zinc-500"
+                      placeholder={authMode === 'signup' ? 'At least 6 characters' : 'Your password'}
+                    />
+                  </label>
+                  {authError && (
+                    <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+                      {authError}
+                    </p>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={authLoading}
+                    className="w-full flex items-center justify-center gap-3 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black font-semibold py-4 px-6 rounded-full hover:scale-[1.02] transition-transform active:scale-95 shadow-xl shadow-black/10 dark:shadow-white/5 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    <LogIn className="w-4 h-4" />
+                    {authLoading ? 'Please wait…' : authMode === 'signup' ? 'Create account' : 'Sign in with email'}
+                  </button>
+                </form>
+
+                <div className="my-6 flex items-center gap-4 text-xs text-zinc-400">
+                  <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+                  OR
+                  <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+                </div>
 
                 <button
                   onClick={loginWithGoogle}
-                  className="w-full flex items-center justify-center gap-3 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-black font-semibold py-4 px-6 rounded-full hover:scale-[1.02] transition-transform active:scale-95 shadow-xl shadow-black/10 dark:shadow-white/5 group"
+                  disabled={authLoading}
+                  className="w-full flex items-center justify-center gap-3 border border-zinc-200 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 font-semibold py-4 px-6 rounded-full hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors disabled:cursor-wait disabled:opacity-60 group"
                 >
-                  <svg className="w-5 h-5 bg-white rounded-full p-0.5" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 bg-white rounded-full p-0.5" viewBox="0 0 24 24" aria-hidden="true">
                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                     <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
                     <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
@@ -383,6 +528,17 @@ export default function App() {
                   Continue with Google
                   <ArrowRight className="w-4 h-4 opacity-0 -ml-4 group-hover:opacity-100 group-hover:ml-0 transition-all duration-300" />
                 </button>
+
+                <p className="mt-6 text-sm text-zinc-500 dark:text-zinc-400">
+                  {authMode === 'signup' ? 'Already have an account?' : "Don't have an account?"}{' '}
+                  <button
+                    type="button"
+                    onClick={() => changeAuthMode(authMode === 'signup' ? 'login' : 'signup')}
+                    className="font-semibold text-zinc-900 dark:text-zinc-100 underline underline-offset-4"
+                  >
+                    {authMode === 'signup' ? 'Sign in' : 'Create one'}
+                  </button>
+                </p>
                 
                 <p className="mt-6 text-xs text-zinc-400 dark:text-zinc-500">
                   By signing in, you agree to our Terms of Service and Anti-Fraud policies.

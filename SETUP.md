@@ -18,6 +18,8 @@
    - Copy its content as a single line for `FIREBASE_SERVICE_ACCOUNT`
 4. Go to **Project Settings → General** → Your apps → Add Web App
    - Copy the `firebaseConfig` values
+5. Go to **Authentication → Sign-in method** and enable **Email/Password** and **Google**
+6. Add the deployed site hostname under **Authentication → Settings → Authorized domains**
 
 ---
 
@@ -40,6 +42,8 @@ VITE_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
 VITE_FIREBASE_MESSAGING_SENDER_ID=...
 VITE_FIREBASE_APP_ID=...
 ```
+
+Keep environment files out of source control. The `VITE_FIREBASE_*` values are Firebase's browser-app configuration; never put service-account credentials or API secrets in these variables.
 
 ### Backend (Netlify Functions — set in Netlify Dashboard)
 ```
