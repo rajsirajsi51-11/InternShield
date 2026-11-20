@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   ArrowRight, Paperclip, ShieldAlert, AlertCircle,
   RefreshCw, Sun, Moon, CheckCircle2, Shield, Check,
@@ -139,6 +139,7 @@ export default function App() {
   const [formData,    setFormData]    = useState({ companyName: '', senderEmail: '', offerContent: '' });
   const [fileName,    setFileName]    = useState('');
   const [fileObj,     setFileObj]     = useState(null);
+  const fileInputRef = useRef(null);
   const [result,      setResult]      = useState(null);    // API response
   const [errorMsg,    setErrorMsg]    = useState('');
   
@@ -228,7 +229,10 @@ export default function App() {
   };
 
   const loadHistoryResult = (scanData) => {
-    setResult(scanData);
+    setResult({
+      ...scanData,
+      scanId: scanData.scanId || `IS-${(scanData.id || '').slice(0, 8).toUpperCase()}`,
+    });
     setAppState('result');
     setView('scan');
   };
@@ -321,20 +325,37 @@ export default function App() {
       body.append('senderEmail',  formData.senderEmail);
       body.append('offerContent', formData.offerContent);
       if (fileObj) body.append('file', fileObj);
-      if (user)    body.append('userId', user.uid);
+
+      const headers = {};
+      if (user) headers.Authorization = `Bearer ${await user.getIdToken()}`;
 
       const res = await fetch('/.netlify/functions/analyze', {
         method: 'POST',
+        headers,
         body,
       });
 
-      const data = await res.json();
+      const rawData = await res.text();
+      let data = null;
+      try {
+        data = rawData ? JSON.parse(rawData) : {};
+      } catch {
+        data = null;
+      }
 
       clearInterval(phraseInterval);
       clearInterval(progressInterval);
       setScanProgress(100);
 
-      if (!res.ok) throw new Error(data.error || 'Analysis failed');
+      if (!res.ok) {
+        throw new Error(
+          data?.error ||
+          (res.status === 404
+            ? 'Analysis service unavailable. Start the app with `npm run dev:netlify`.'
+            : 'Analysis failed')
+        );
+      }
+      if (!data) throw new Error('The analysis service returned an invalid response.');
 
       setTimeout(() => {
         setResult(data);
@@ -354,6 +375,7 @@ export default function App() {
     setFormData({ companyName: '', senderEmail: '', offerContent: '' });
     setFileName('');
     setFileObj(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
     setResult(null);
     setErrorMsg('');
     setScanProgress(0);
@@ -678,7 +700,7 @@ export default function App() {
                         <label className="block text-xs font-semibold tracking-wide text-zinc-400 dark:text-zinc-500 mb-2 uppercase">Offer Content</label>
                         <textarea
                           id="offer-content"
-                          required
+                          required={!fileObj}
                           value={formData.offerContent}
                           onChange={(e) => setFormData({ ...formData, offerContent: e.target.value })}
                           rows="3"
@@ -702,6 +724,7 @@ export default function App() {
                       <span className="truncate max-w-[150px]">{fileName || 'Attach PDF / DOCX'}</span>
                       <input
                         id="file-upload"
+                        ref={fileInputRef}
                         type="file"
                         className="hidden"
                         accept=".pdf,.doc,.docx"

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:functions": "netlify functions:serve --offline --port 9999 --functions netlify/functions",
     "build": "vite build",
     "build:netlify": "npm install --prefix netlify/functions && vite build",
     "preview": "vite preview"
@@ -20,6 +21,7 @@
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.19",
+    "netlify-cli": "^27.20.1",
     "postcss": "^8.4.39",
     "tailwindcss": "^3.4.6",
     "vite": "^5.3.3"

@@ -3,16 +3,14 @@
 ## Prerequisites
 - Node.js 18+
 - npm
-- Netlify CLI: `npm install -g netlify-cli`
-- Firebase account
-- Groq account (free at console.groq.com)
+- Firebase and Groq accounts for cloud features (the local rule-based scan works without Groq)
 
 ---
 
 ## 1. Firebase Setup
 
 1. Go to [Firebase Console](https://console.firebase.google.com) → Create project
-2. Enable **Firestore Database** (start in test mode)
+2. Enable **Firestore Database**. Apply the rules from `firestore.rules` in the Firebase Console (Firestore → Rules). This allows signed-in users to read only their own scans; scan writes stay server-side.
 3. Go to **Project Settings → Service Accounts** → Generate new private key
    - Download the JSON file
    - Copy its content as a single line for `FIREBASE_SERVICE_ACCOUNT`
@@ -62,17 +60,22 @@ FIREBASE_SERVICE_ACCOUNT={"type":"service_account",...}
 ## 4. Local Development
 
 ```bash
-# Install frontend deps
+# Install frontend and local Netlify CLI
 npm install
 
 # Install function deps
-cd netlify/functions && npm install && cd ../..
+cd netlify/functions
+npm install
+cd ../..
 
-# Run with Netlify Dev (proxies functions automatically)
-netlify dev
+# In terminal 1, start Vite
+npm run dev
+
+# In terminal 2, start the Netlify functions server
+npm run dev:functions
 ```
 
-Visit http://localhost:8888
+Visit http://localhost:5173. The Vite server proxies analysis requests to the local functions server on port 9999.
 
 ---
 
@@ -99,16 +102,4 @@ Or just push to GitHub and connect the repo in Netlify Dashboard.
 
 ## 6. Firestore Security Rules
 
-In Firebase Console → Firestore → Rules:
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // Only server (Admin SDK) can write scans
-    match /scans/{scanId} {
-      allow read: if false;
-      allow write: if false;
-    }
-  }
-}
-```
+Copy `firestore.rules` into Firebase Console → Firestore → Rules and publish them. These rules match the app's history screen: a signed-in user can read scans whose `userId` matches their Firebase UID, while all client writes are denied. The Netlify function verifies Firebase ID tokens before associating scans with an account.
